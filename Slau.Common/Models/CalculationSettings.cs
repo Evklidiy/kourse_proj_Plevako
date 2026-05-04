@@ -1,12 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Slau.Common.Models
 {
-    internal class CalculationSettings
+    [Serializable]
+    public class CalculationSettings
     {
+        public int Dimension { get; set; }     // Число неизвестных N
+        public double Epsilon { get; set; }    // Точность для метода релаксации
+        public int MaxIterations { get; set; } // Лимит итераций
     }
 }

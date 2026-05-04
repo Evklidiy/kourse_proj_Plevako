@@ -1,13 +1,11 @@
-﻿
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System;
 
 namespace Slau.Common.Networking
 {
-    internal class NetworkMessage
+    [Serializable]
+    public class NetworkMessage
     {
+        public ProtocolCommand Command { get; set; }
+        public object Data { get; set; } // Полезная нагрузка (Chunk, PivotRow и т.д.)
     }
 }

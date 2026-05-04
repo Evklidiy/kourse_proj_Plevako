@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Slau.Common.Models
 {
-    internal class MatrixChunk
+    [Serializable]
+    public class MatrixChunk
     {
+        public int StartRowIndex { get; set; } // С какой строки начинается блок
+        public int RowCount { get; set; }      // Количество строк в блоке
+        public int TotalColumns { get; set; }  // N + 1
+        public double[] Data { get; set; }     // Плоский массив данных для передачи
     }
 }

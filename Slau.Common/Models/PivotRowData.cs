@@ -1,12 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Slau.Common.Models
 {
-    internal class PivotRowData
+    [Serializable]
+    public class PivotRowData
     {
+        public int PivotRowIndex { get; set; } // Индекс k
+        public double[] Row { get; set; }      // Сама нормализованная строка
     }
 }

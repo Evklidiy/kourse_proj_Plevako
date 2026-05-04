@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Slau.MathEngine.Interfaces
+﻿namespace Slau.MathEngine.Interfaces
 {
-    internal class ISlauSolver
+    public interface ISlauSolver
     {
+        // Метод принимает матрицу коэффициентов A и вектор свободных членов B
+        double[] Solve(double[][] matrix, double[] b);
     }
 }
