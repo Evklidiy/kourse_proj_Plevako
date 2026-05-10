@@ -7,6 +7,8 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +17,14 @@
     <PackageReference Include="NUnit" Version="3.14.0" />
     <PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Slau.Common\Slau.Common.csproj" />
+    <ProjectReference Include="..\Slau.Master\Slau.Master.csproj" />
+    <ProjectReference Include="..\Slau.MathEngine\Slau.MathEngine.csproj" />
+    <ProjectReference Include="..\Slau.Worker\Slau.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>
