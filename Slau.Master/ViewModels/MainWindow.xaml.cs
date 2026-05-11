@@ -29,7 +29,7 @@ namespace Slau.Master
             if (_storage != null) _storage.Dispose();
             _storage = new LargeMatrixStorage(n);
             _storage.GenerateRandom();
-            Log($"Сгенерирована матрица {n}x{n} в MMF-хранилище.");
+            Log($"Сгенерирована матрица {n}x{n} в MMF (результат должен быть x=1).");
         }
 
         private void BtnLoadFile_Click(object sender, RoutedEventArgs e)
@@ -41,11 +41,9 @@ namespace Slau.Master
                 {
                     string firstLine = File.ReadLines(openFileDialog.FileName).First();
                     int n = int.Parse(firstLine.Trim());
-
                     if (_storage != null) _storage.Dispose();
                     _storage = new LargeMatrixStorage(n);
                     _storage.LoadFromFile(openFileDialog.FileName);
-
                     TxtN.Text = n.ToString();
                     Log($"Файл {openFileDialog.SafeFileName} загружен.");
                 }
@@ -56,11 +54,11 @@ namespace Slau.Master
         private void BtnCreateTestFile_Click(object sender, RoutedEventArgs e)
         {
             int n = int.Parse(TxtN.Text);
-            SaveFileDialog saveFileDialog = new SaveFileDialog { Filter = "Text files (*.txt)|*.txt", FileName = "matrix_50k.txt" };
-            if (saveFileDialog.ShowDialog() == true)
+            SaveFileDialog sfd = new SaveFileDialog { Filter = "Text files|*.txt", FileName = "matrix_50k.txt" };
+            if (sfd.ShowDialog() == true)
             {
                 Log("Создание файла...");
-                using (StreamWriter sw = new StreamWriter(saveFileDialog.FileName))
+                using (StreamWriter sw = new StreamWriter(sfd.FileName))
                 {
                     sw.WriteLine(n);
                     Random r = new Random();
@@ -68,7 +66,7 @@ namespace Slau.Master
                     {
                         var row = new System.Text.StringBuilder();
                         for (int j = 0; j < n; j++) row.Append((r.NextDouble() * 10).ToString("F2") + " ");
-                        row.Append((r.NextDouble() * 100).ToString("F2"));
+                        row.Append((n + i).ToString("F2")); // Формула из примера друга для x=1
                         sw.WriteLine(row.ToString());
                     }
                 }
@@ -76,10 +74,28 @@ namespace Slau.Master
             }
         }
 
+        private void ShowResultPreview(double[] x)
+        {
+            Log("--- РЕЗУЛЬТАТ (Вектор X) ---");
+            for (int i = 0; i < Math.Min(5, x.Length); i++)
+                Log($"X[{i}] = {x[i]:F6}");
+
+            if (x.Length > 5) Log("... и так далее ...");
+
+            if (MessageBox.Show("Расчет завершен. Сохранить полный результат в файл?", "Готово", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            {
+                SaveFileDialog sfd = new SaveFileDialog { Filter = "Text files|*.txt", FileName = "solution.txt" };
+                if (sfd.ShowDialog() == true)
+                {
+                    File.WriteAllLines(sfd.FileName, x.Select(v => v.ToString("F10")));
+                    Log("Файл сохранен.");
+                }
+            }
+        }
+
         private void BtnDistributed_Click(object sender, RoutedEventArgs e)
         {
-            if (_storage == null) { MessageBox.Show("Нет данных!"); return; }
-
+            if (_storage == null) return;
             var wm = new WorkerManager();
             foreach (var w in TxtWorkers.Text.Split(','))
             {
@@ -90,90 +106,67 @@ namespace Slau.Master
             Log("Запуск распределенного расчета...");
             var controller = new DistributedGaussController(_storage, wm);
             Stopwatch sw = Stopwatch.StartNew();
-            controller.Solve();
+            double[] result = controller.Solve();
             sw.Stop();
+
             Log($"Завершено за {sw.ElapsedMilliseconds} мс.");
+            ShowResultPreview(result);
         }
 
         private void BtnLocalGauss_Click(object sender, RoutedEventArgs e)
         {
-            if (_storage == null) { MessageBox.Show("Сначала загрузите или сгенерируйте данные!"); return; }
-
-            Log("Запуск ЛОКАЛЬНОГО метода Гаусса-Джордана...");
+            if (_storage == null) return;
+            Log("Запуск локального Гаусса...");
             int n = _storage.N;
             Stopwatch sw = Stopwatch.StartNew();
 
-            try
+            for (int k = 0; k < n; k++)
             {
-                // Основной цикл алгоритма (выполняется только на Мастере)
-                for (int k = 0; k < n; k++)
+                double[] pivotRow = _storage.GetRow(k);
+                double pivotElement = pivotRow[k];
+                for (int j = k; j <= n; j++) pivotRow[j] /= pivotElement;
+                _storage.SetRow(k, pivotRow);
+
+                for (int i = 0; i < n; i++)
                 {
-                    // 1. Получаем и нормализуем опорную строку
-                    double[] pivotRow = _storage.GetRow(k);
-                    double pivotElement = pivotRow[k];
-
-                    for (int j = k; j <= n; j++)
-                        pivotRow[j] /= pivotElement;
-
-                    _storage.SetRow(k, pivotRow);
-
-                    // 2. Исключаем элементы во всех остальных строках
-                    for (int i = 0; i < n; i++)
-                    {
-                        if (i == k) continue;
-
-                        double[] currentRow = _storage.GetRow(i);
-                        double factor = currentRow[k];
-
-                        if (Math.Abs(factor) > 1e-25)
-                        {
-                            for (int j = k; j <= n; j++)
-                            {
-                                currentRow[j] -= factor * pivotRow[j];
-                            }
-                            _storage.SetRow(i, currentRow);
-                        }
-                    }
-
-                    // Обновляем лог каждые 500 шагов, чтобы видеть прогресс
-                    if (k % 500 == 0)
-                    {
-                        // Используем Dispatcher, чтобы UI не зависал наглухо
-                        Dispatcher.Invoke(() => Log($"Локальный Гаусс: шаг {k}..."), System.Windows.Threading.DispatcherPriority.Background);
-                    }
+                    if (i == k) continue;
+                    double[] curr = _storage.GetRow(i);
+                    double factor = curr[k];
+                    if (Math.Abs(factor) < 1e-25) continue;
+                    for (int j = k; j <= n; j++) curr[j] -= factor * pivotRow[j];
+                    _storage.SetRow(i, curr);
                 }
+                if (k % 500 == 0) Dispatcher.Invoke(() => Log($"Шаг {k}..."), System.Windows.Threading.DispatcherPriority.Background);
+            }
 
-                sw.Stop();
-                Log($"ЛОКАЛЬНЫЙ ГАУСС ЗАВЕРШЕН. Время: {sw.ElapsedMilliseconds} мс.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Ошибка при локальном расчете: " + ex.Message);
-            }
+            double[] resultX = new double[n];
+            for (int i = 0; i < n; i++) resultX[i] = _storage.GetRow(i)[n];
+
+            sw.Stop();
+            Log($"Локальный Гаусс завершен за {sw.ElapsedMilliseconds} мс.");
+            ShowResultPreview(resultX);
         }
 
         private void BtnLocal_Click(object sender, RoutedEventArgs e)
         {
             if (_storage == null) return;
-            Log("Запуск локальной релаксации (подготовка данных)...");
-
+            Log("Локальная релаксация...");
             int n = _storage.N;
-            double[][] matrixA = new double[n][];
-            double[] vectorB = new double[n];
-
+            double[][] A = new double[n][];
+            double[] B = new double[n];
             for (int i = 0; i < n; i++)
             {
-                double[] row = _storage.GetRow(i);
-                matrixA[i] = new double[n];
-                Array.Copy(row, 0, matrixA[i], 0, n);
-                vectorB[i] = row[n];
+                double[] r = _storage.GetRow(i);
+                A[i] = new double[n];
+                Array.Copy(r, 0, A[i], 0, n);
+                B[i] = r[n];
             }
-
-            RelaxationSolver solver = new RelaxationSolver(1e-6, 500);
+            var solver = new RelaxationSolver(1e-6, 500);
             Stopwatch sw = Stopwatch.StartNew();
-            solver.Solve(matrixA, vectorB);
+            double[] result = solver.Solve(A, B);
             sw.Stop();
-            Log($"Релаксация: {sw.ElapsedMilliseconds} мс.");
+            Log($"Релаксация завершена за {sw.ElapsedMilliseconds} мс.");
+            ShowResultPreview(result);
         }
     }
 }

@@ -28,7 +28,7 @@ namespace Slau.Worker.Services
         {
             TcpListener listener = new TcpListener(IPAddress.Any, _port);
             listener.Start();
-            Console.WriteLine($"[СЕРВЕР] Ожидание подключения Мастера на порту {_port}...");
+            Console.WriteLine($"[СЕРВЕР] Ожидание Мастера на порту {_port}...");
 
             while (true)
             {
@@ -50,7 +50,7 @@ namespace Slau.Worker.Services
                             totalRead += read;
                         }
 
-                        NetworkMessage msg = (NetworkMessage)SerializationHelper.Deserialize(buffer);
+                        NetworkMessage msg = SerializationHelper.Deserialize<NetworkMessage>(buffer);
                         HandleCommand(msg, stream);
                     }
                 }
@@ -67,27 +67,33 @@ namespace Slau.Worker.Services
             {
                 case ProtocolCommand.INIT_CHUNKS:
                     _calcService.Initialize((MatrixChunk)msg.Data);
-                    Console.WriteLine($"[СЕТЬ] Данные приняты.");
-                    SendOkResponse(stream); // Подтверждаем мастеру готовность
+                    Console.WriteLine($"[СЕТЬ] Данные чанка приняты.");
+                    SendOkResponse(stream);
                     break;
 
                 case ProtocolCommand.PROCESS_GAUSS:
                     PivotRowData pd = (PivotRowData)msg.Data;
-                    if (pd.PivotRowIndex % 500 == 0)
-                        Console.WriteLine($"[РАСЧЕТ] Шаг: {pd.PivotRowIndex}");
+
+                    // ВЕРНУЛ ЛОГИРОВАНИЕ: каждые 100 шагов
+                    if (pd.PivotRowIndex % 100 == 0)
+                        Console.WriteLine($"[РАСЧЕТ] Шаг метода Гаусса: {pd.PivotRowIndex}");
 
                     _calcService.ProcessGaussStep(pd);
-                    SendOkResponse(stream); // Подтверждаем выполнение шага
+                    SendOkResponse(stream);
+                    break;
+
+                case ProtocolCommand.GET_SPECIFIC_ROW:
+                    int rIdx = Convert.ToInt32(msg.Data);
+                    byte[] rowData = SerializationHelper.Serialize(_calcService.GetRowForMaster(rIdx));
+                    stream.Write(BitConverter.GetBytes(rowData.Length), 0, 4);
+                    stream.Write(rowData, 0, rowData.Length);
                     break;
 
                 case ProtocolCommand.GET_RESULT:
-                    byte[] responseData = SerializationHelper.Serialize(_calcService.GetResults());
-                    stream.Write(BitConverter.GetBytes(responseData.Length), 0, 4);
-                    stream.Write(responseData, 0, responseData.Length);
-                    break;
-
-                case ProtocolCommand.STATUS_CHECK:
-                    SendOkResponse(stream);
+                    Console.WriteLine("[СЕТЬ] Отправка итогового вектора X...");
+                    byte[] res = SerializationHelper.Serialize(_calcService.GetResults());
+                    stream.Write(BitConverter.GetBytes(res.Length), 0, 4);
+                    stream.Write(res, 0, res.Length);
                     break;
             }
         }

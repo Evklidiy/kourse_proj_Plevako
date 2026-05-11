@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Sockets;
 using System.Diagnostics;
+using System.Collections.Generic;
 using Slau.Common.Helpers;
 using Slau.Common.Models;
 using Slau.Common.Networking;
@@ -24,48 +25,43 @@ namespace Slau.Master.Logic
         {
             int n = _storage.N;
             int workersCount = _workerManager.Nodes.Count;
-
-            // 1. Распределение (Ждем подтверждения)
             int rowsPerWorker = n / workersCount;
+
+            // 1. Инициализация
             for (int i = 0; i < workersCount; i++)
             {
-                int startRow = i * rowsPerWorker;
-                int count = (i == workersCount - 1) ? (n - startRow) : rowsPerWorker;
-                var chunk = CreateChunk(startRow, count);
-
-                // Ждем пока воркер инициализирует данные
-                SendMessageWithResponse(_workerManager.Nodes[i], ProtocolCommand.INIT_CHUNKS, chunk);
+                int start = i * rowsPerWorker;
+                int count = (i == workersCount - 1) ? (n - start) : rowsPerWorker;
+                SendMessageWithResponse(_workerManager.Nodes[i], ProtocolCommand.INIT_CHUNKS, CreateChunk(start, count));
             }
 
-            // 2. Цикл Гаусса (Ждем подтверждения каждого шага)
+            // 2. Цикл Гаусса
             for (int k = 0; k < n; k++)
             {
-                double[] pivotRow = _storage.GetRow(k);
+                int workerIndex = Math.Min(k / rowsPerWorker, workersCount - 1);
+                var ownerNode = _workerManager.Nodes[workerIndex];
+
+                // Получаем строку, нормализуем её и рассылаем
+                double[] pivotRow = (double[])SendMessageWithResponse(ownerNode, ProtocolCommand.GET_SPECIFIC_ROW, k);
                 double pivotElement = pivotRow[k];
 
                 for (int j = k; j <= n; j++) pivotRow[j] /= pivotElement;
-                _storage.SetRow(k, pivotRow);
 
                 var pivotData = new PivotRowData { PivotRowIndex = k, Row = pivotRow };
 
                 foreach (var worker in _workerManager.Nodes)
-                {
-                    // ВАЖНО: Ждем пока воркер закончит расчет шага k
                     SendMessageWithResponse(worker, ProtocolCommand.PROCESS_GAUSS, pivotData);
-                }
-
-                if (k % 500 == 0) Debug.WriteLine($"Шаг {k} завершен.");
             }
 
-            // 3. Сбор результата
-            double[] resultX = new double[n];
-            foreach (var worker in _workerManager.Nodes)
+            // 3. Сбор
+            double[] fullX = new double[n];
+            for (int i = 0; i < workersCount; i++)
             {
-                var part = (double[])SendMessageWithResponse(worker, ProtocolCommand.GET_RESULT, null);
-                // Тут можно добавить логику записи X обратно в storage
+                double[] part = (double[])SendMessageWithResponse(_workerManager.Nodes[i], ProtocolCommand.GET_RESULT, null);
+                int start = i * rowsPerWorker;
+                Array.Copy(part, 0, fullX, start, part.Length);
             }
-
-            return resultX;
+            return fullX;
         }
 
         private MatrixChunk CreateChunk(int start, int count)
@@ -92,18 +88,14 @@ namespace Slau.Master.Logic
                     stream.Write(BitConverter.GetBytes(buffer.Length), 0, 4);
                     stream.Write(buffer, 0, buffer.Length);
 
-                    // Ждем ответ (ОК или данные)
-                    byte[] lengthBuffer = new byte[4];
-                    int readLen = stream.Read(lengthBuffer, 0, 4);
-                    if (readLen < 4) return null;
-
-                    int length = BitConverter.ToInt32(lengthBuffer, 0);
-                    byte[] responseBuffer = new byte[length];
+                    byte[] lenBuf = new byte[4];
+                    if (stream.Read(lenBuf, 0, 4) < 4) return null;
+                    int len = BitConverter.ToInt32(lenBuf, 0);
+                    byte[] responseBuffer = new byte[len];
                     int totalRead = 0;
-                    while (totalRead < length)
-                    {
-                        totalRead += stream.Read(responseBuffer, totalRead, length - totalRead);
-                    }
+                    while (totalRead < len)
+                        totalRead += stream.Read(responseBuffer, totalRead, len - totalRead);
+
                     return SerializationHelper.Deserialize(responseBuffer);
                 }
             }

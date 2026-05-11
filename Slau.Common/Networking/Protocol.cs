@@ -3,11 +3,11 @@
     public enum ProtocolCommand : byte
     {
         IDLE = 0,
-        INIT_CHUNKS = 1,    // Рассылка частей матрицы воркерам
-        PROCESS_GAUSS = 2,  // Команда на выполнение шага Гаусса
-        UPDATE_DATA = 3,    // Обновление данных (если нужно)
-        GET_RESULT = 4,     // Сбор решения X
-        STATUS_CHECK = 5,   // Проверка готовности воркера
+        INIT_CHUNKS = 1,
+        PROCESS_GAUSS = 2,
+        GET_RESULT = 3,
+        GET_SPECIFIC_ROW = 4, // НОВАЯ КОМАНДА: получить одну строку от воркера
+        STATUS_CHECK = 5,
         ERROR = 255
     }
 }

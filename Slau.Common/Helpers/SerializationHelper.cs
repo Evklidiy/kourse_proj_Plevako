@@ -6,8 +6,7 @@ namespace Slau.Common.Helpers
 {
     public static class SerializationHelper
     {
-        // Используем BinaryFormatter для простоты реализации учебного проекта.
-        // Игнорируем предупреждение об устаревании (SYSLIB0011).
+        // Игнорируем предупреждение об устаревании BinaryFormatter для учебного проекта
 #pragma warning disable SYSLIB0011
 
         public static byte[] Serialize(object obj)
@@ -21,6 +20,7 @@ namespace Slau.Common.Helpers
             }
         }
 
+        // Обычный метод десериализации (возвращает object)
         public static object Deserialize(byte[] data)
         {
             if (data == null) return null;
@@ -30,6 +30,14 @@ namespace Slau.Common.Helpers
                 return formatter.Deserialize(ms);
             }
         }
+
+        // НОВЫЙ УНИВЕРСАЛЬНЫЙ МЕТОД (исправляет ошибку CS0308)
+        public static T Deserialize<T>(byte[] data)
+        {
+            object result = Deserialize(data);
+            return (T)result;
+        }
+
 #pragma warning restore SYSLIB0011
     }
 }

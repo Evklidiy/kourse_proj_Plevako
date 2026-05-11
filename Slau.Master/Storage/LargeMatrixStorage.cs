@@ -69,9 +69,15 @@ namespace Slau.Master.Storage
             for (int i = 0; i < N; i++)
             {
                 double[] row = new double[N + 1];
-                for (int j = 0; j < N; j++) row[j] = r.NextDouble() * 10;
-                row[i] += 100; // Диагональное преобладание
-                row[N] = r.NextDouble() * 100; // Элемент B
+                double sum = 0;
+                for (int j = 0; j < N; j++)
+                {
+                    row[j] = r.NextDouble() * 5 + 1; // Числа от 1 до 6
+                    sum += row[j];
+                }
+                row[i] += N * 2; // Гарантируем мощное диагональное преобладание
+                sum += N * 2;
+                row[N] = sum; // Значит x_i всегда будет равен 1.0
                 SetRow(i, row);
             }
         }
